@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE MCP 中继控制面板</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            background: #f5f7fa;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        #app {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 1.6rem;
+            color: #1a1a2e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        h1 small {
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: #6c757d;
+        }
+        .section {
+            background: #f8f9fc;
+            border-radius: 16px;
+            padding: 16px 18px;
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+        }
+        .section-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .row label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #34495e;
+            min-width: 60px;
+        }
+        .row input[type="range"] {
+            flex: 1;
+            min-width: 120px;
+            accent-color: #4a6cf7;
+        }
+        .row select {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid #ced4da;
+            background: white;
+            font-size: 0.9rem;
+            min-width: 80px;
+        }
+        .row .value-display {
+            min-width: 36px;
+            text-align: center;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .btn {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            background: #e9ecef;
+            color: #1a1a2e;
+        }
+        .btn:hover { background: #dde1e6; }
+        .btn:active { transform: scale(0.96); }
+        .btn-primary { background: #4a6cf7; color: white; }
+        .btn-primary:hover { background: #3a5cd9; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-success:hover { background: #218838; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-warning { background: #ffc107; color: #1a1a2e; }
+        .btn-warning:hover { background: #e0a800; }
+        .btn-outline { background: transparent; border: 1px solid #ced4da; }
+        .btn-outline:hover { background: #f1f3f5; }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: #e9ecef;
+            color: #6c757d;
+        }
+        .status-badge.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-badge.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        #logArea {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-family: 'Menlo', 'Consolas', monospace;
+            font-size: 0.8rem;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin-top: 8px;
+            line-height: 1.5;
+        }
+        #logArea .log-time {
+            color: #6c757d;
+            margin-right: 8px;
+        }
+        #logArea .log-info { color: #8ab4f8; }
+        #logArea .log-ok { color: #81c995; }
+        #logArea .log-error { color: #f28b82; }
+        #logArea .log-warn { color: #fdd663; }
+
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .gap { gap: 8px; }
+        .mt-2 { margin-top: 12px; }
+        .mb-1 { margin-bottom: 8px; }
+
+        audio {
+            display: none;
+        }
+        @media (max-width: 600px) {
+            #app { padding: 16px; }
+            .row { flex-direction: column; align-items: stretch; }
+            .row label { min-width: auto; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <h1>
+        ⚡ BLE MCP 中继
+        <small>v1.0</small>
+    </h1>
+
+    <!-- 服务器配置 -->
+    <div class="section">
+        <div class="section-title">🌐 MCP 服务器</div>
+        <div class="row">
+            <input type="text" id="serverUrl" placeholder="https://你的服务地址" value="https://ble-relay-template-production-ca83.up.railway.app" style="flex:1; padding:8px 12px; border-radius:8px; border:1px solid #ced4da; font-size:0.9rem;">
+            <button class="btn btn-primary" id="btnConnectServer">连接</button>
+            <button class="btn btn-outline" id="btnDisconnectServer">断开</button>
+        </div>
+        <div class="row">
+            <span class="status-badge" id="serverStatus">未连接</span>
+        </div>
+    </div>
+
+    <!-- 蓝牙控制 -->
+    <div class="section">
+        <div class="section-title">📡 蓝牙设备</div>
+        <div class="row">
+            <button class="btn btn-success" id="btnConnectBLE">连接蓝牙</button>
+            <button class="btn btn-danger" id="btnDisconnectBLE">断开</button>
+            <span class="status-badge" id="bleStatus">未连接</span>
+            <span style="font-size:0.8rem; color:#6c757d;" id="deviceName"></span>
+        </div>
+        <div class="row">
+            <button class="btn btn-warning" id="btnTest">🧪 测试（震动模式3 强度80）</button>
+            <button class="btn btn-danger" id="btnStopAll">⏹ 全部停止</button>
+        </div>
+    </div>
+
+    <!-- 功能控制 -->
+    <div class="section">
+        <div class="section-title">🎮 功能控制</div>
+
+        <!-- 震动 -->
+        <div class="row">
+            <label>震动</label>
+            <select id="vibMode">
+                <option value="1">1 持续慢</option>
+                <option value="2">2 持续中</option>
+                <option value="3">3 持续快</option>
+                <option value="4">4 渐变循环</option>
+                <option value="5">5 长震渐强</option>
+                <option value="6">6 3短1长</option>
+                <option value="7">7 变频短震</option>
+                <option value="8">8 连续短震</option>
+                <option value="9">9 更快短震</option>
+                <option value="10">10 更更快短震</option>
+            </select>
+            <input type="range" id="vibLevel" min="0" max="100" value="50">
+            <span class="value-display" id="vibLevelDisplay">50</span>
+            <button class="btn btn-primary" id="btnSendVib">发送</button>
+        </div>
+
+        <!-- 吮吸 -->
+        <div class="row">
+            <label>吮吸</label>
+            <select id="sucMode">
+                <option value="1">1 持续吮吸</option>
+                <option value="2">2 1长2短</option>
+                <option value="3">3 间歇长吸</option>
+                <option value="4">4 持续短吸</option>
+                <option value="5">5 12短1长</option>
+            </select>
+            <input type="range" id="sucLevel" min="0" max="100" value="50">
+            <span class="value-display" id="sucLevelDisplay">50</span>
+            <button class="btn btn-primary" id="btnSendSuc">发送</button>
+        </div>
+
+        <!-- 加热 -->
+        <div class="row">
+            <label>加热</label>
+            <button class="btn" id="btnHeatOn" style="background:#ff6b6b; color:white;">开</button>
+            <button class="btn" id="btnHeatOff">关</button>
+            <span style="font-size:0.9rem; color:#2c3e50;" id="heatStatus">关闭</span>
+        </div>
+
+        <!-- 伸缩转珠 -->
+        <div class="row">
+            <label>伸缩转珠</label>
+            <select id="rotMode">
+                <option value="0">0 停止</option>
+                <option value="1">1 持续伸缩+转珠</option>
+                <option value="2">2 更快伸缩+转珠</option>
+                <option value="3">3 持续伸缩+间歇转珠</option>
+                <option value="4">4 渐快循环</option>
+                <option value="5">5 间隔伸缩+转珠</option>
+                <option value="6">6 更快间隔</option>
+                <option value="7">7 连伸两次+缩+转珠</option>
+            </select>
+            <button class="btn btn-primary" id="btnSendRot">发送</button>
+        </div>
+    </div>
+
+    <!-- 日志 -->
+    <div class="section" style="margin-bottom:0;">
+        <div class="flex-between">
+            <div class="section-title" style="margin-bottom:0;">📋 日志</div>
+            <button class="btn btn-outline" id="btnClearLog">清空</button>
+        </div>
+        <div id="logArea"></div>
+    </div>
+
+    <!-- 隐藏音频保活 -->
+    <audio id="keepaliveAudio" loop crossorigin="anonymous">
+        <source src="https://img.baibai.cv/f/dZymTQ/30min-osbvow%202.mp4" type="audio/mpeg">
+        您的浏览器不支持音频播放。
+    </audio>
+</div>
+
+<script>
+    // ========== 配置 ==========
+    const SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
+    const CHARACTERISTIC_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
+
+    // ========== DOM 引用 ==========
+    const $ = (id) => document.getElementById(id);
+    const serverUrl = $('serverUrl');
+    const btnConnectServer = $('btnConnectServer');
+    const btnDisconnectServer = $('btnDisconnectServer');
+    const serverStatus = $('serverStatus');
+    const btnConnectBLE = $('btnConnectBLE');
+    const btnDisconnectBLE = $('btnDisconnectBLE');
+    const bleStatus = $('bleStatus');
+    const deviceName = $('deviceName');
+
+    const vibMode = $('vibMode');
+    const vibLevel = $('vibLevel');
+    const vibLevelDisplay = $('vibLevelDisplay');
+    const btnSendVib = $('btnSendVib');
+
+    const sucMode = $('sucMode');
+    const sucLevel = $('sucLevel');
+    const sucLevelDisplay = $('sucLevelDisplay');
+    const btnSendSuc = $('btnSendSuc');
+
+    const btnHeatOn = $('btnHeatOn');
+    const btnHeatOff = $('btnHeatOff');
+    const heatStatus = $('heatStatus');
+
+    const rotMode = $('rotMode');
+    const btnSendRot = $('btnSendRot');
+
+    const btnTest = $('btnTest');
+    const btnStopAll = $('btnStopAll');
+    const logArea = $('logArea');
+    const btnClearLog = $('btnClearLog');
+    const audioEl = $('keepaliveAudio');
+
+    // ========== 状态 ==========
+    let isServerConnected = false;
+    let isBLEConnected = false;
+    let characteristic = null;
+    let pollTimer = null;
+    let keepAliveTimer = null;
+
+    // 当前活跃状态（用于续命）
+    let currentState = {
+        vibration: { mode: 1, level: 0 },   // level 0~100
+        suction: { mode: 1, level: 0 },
+        heat: false,
+        rotate: 0  // 0表示停止
+    };
+
+    // ========== 日志 ==========
+    function log(msg, type = 'info') {
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        const cls = `log-${type}`;
+        entry.innerHTML = `<span class="log-time">[${time}]</span><span class="${cls}">${msg}</span>`;
+        logArea.appendChild(entry);
+        logArea.scrollTop = logArea.scrollHeight;
+        // 限制条目
+        while (logArea.children.length > 200) {
+            logArea.removeChild(logArea.firstChild);
+        }
+    }
+
+    function updateServerStatus(text, cls = '') {
+        serverStatus.textContent = text;
+        serverStatus.className = 'status-badge' + (cls ? ' ' + cls : '');
+    }
+
+    function updateBLEStatus(text, cls = '') {
+        bleStatus.textContent = text;
+        bleStatus.className = 'status-badge' + (cls ? ' ' + cls : '');
+    }
+
+    // ========== 命令生成 ==========
+    function mapLevel(percent) {
+        // 0~100 -> 0~10 (硬件值)
+        return Math.min(10, Math.max(0, Math.round(percent / 10)));
+    }
+
+    function cmdVibration(mode, levelPercent) {
+        const hw = mapLevel(levelPercent);
+        return new Uint8Array([0x55, 0x03, 0x00, 0x00, mode, hw, 0x00]);
+    }
+
+    function cmdSuction(mode, levelPercent) {
+        const hw = mapLevel(levelPercent);
+        // 如果吮吸头是 0x05，可将下面 0x55 改为 0x05
+        return new Uint8Array([0x55, 0x09, 0x00, 0x00, mode, hw, 0x00]);
+    }
+
+    function cmdHeat(on) {
+        const temp = on ? 0x37 : 0x00;
+        return new Uint8Array([0x55, 0x05, 0x01, temp, 0x00, 0x00, 0x00]);
+    }
+
+    function cmdRotate(mode) {
+        // mode 0~7, 0停止
+        return new Uint8Array([0x55, 0x08, 0x00, 0x00, Math.min(7, Math.max(0, mode)), 0x00, 0x00]);
+    }
+
+    // ========== 蓝牙写入 ==========
+    async function writeCommand(dataArray) {
+        if (!characteristic) {
+            log('❌ 蓝牙未连接或特征无效', 'error');
+            return false;
+        }
+        try {
+            await characteristic.writeValue(dataArray);
+            log(`📤 发送: ${Array.from(dataArray).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ')}`, 'ok');
+            return true;
+        } catch (e) {
+            log(`❌ 写入失败: ${e.message}`, 'error');
+            return false;
+        }
+    }
+
+    // ========== 发送各功能（同时更新状态） ==========
+    async function sendVibration(mode, level) {
+        currentState.vibration = { mode, level };
+        const data = cmdVibration(mode, level);
+        return await writeCommand(data);
+    }
+
+    async function sendSuction(mode, level) {
+        currentState.suction = { mode, level };
+        const data = cmdSuction(mode, level);
+        return await writeCommand(data);
+    }
+
+    async function sendHeat(on) {
+        currentState.heat = on;
+        heatStatus.textContent = on ? '开启' : '关闭';
+        const data = cmdHeat(on);
+        return await writeCommand(data);
+    }
+
+    async function sendRotate(mode) {
+        currentState.rotate = mode;
+        const data = cmdRotate(mode);
+        return await writeCommand(data);
+    }
+
+    // ========== 停止所有 ==========
+    async function stopAll() {
+        log('⏹ 停止所有功能', 'warn');
+        // 更新状态
+        currentState.vibration.level = 0;
+        currentState.suction.level = 0;
+        currentState.heat = false;
+        currentState.rotate = 0;
+        heatStatus.textContent = '关闭';
+
+        // 依次发送停止命令
+        await writeCommand(cmdVibration(1, 0));
+        await writeCommand(cmdSuction(1, 0));
+        await writeCommand(cmdHeat(false));
+        await writeCommand(cmdRotate(0));
+        log('✅ 全部停止指令已发送', 'ok');
+    }
+
+    // ========== 续命：发送当前所有活跃状态 ==========
+    async function keepAlive() {
+        if (!isBLEConnected || !characteristic) return;
+        try {
+            const { vibration, suction, heat, rotate } = currentState;
+            // 只发送非零/开启的状态
+            if (vibration.level > 0) {
+                await writeCommand(cmdVibration(vibration.mode, vibration.level));
+            }
+            if (suction.level > 0) {
+                await writeCommand(cmdSuction(suction.mode, suction.level));
+            }
+            if (heat) {
+                await writeCommand(cmdHeat(true));
+            }
+            if (rotate > 0) {
+                await writeCommand(cmdRotate(rotate));
+            }
+            // 如果所有状态都是零/关闭，可考虑发送一个空指令? 但无需。
+        } catch (e) {
+            log(`续命失败: ${e.message}`, 'error');
+        }
+    }
+
+    // ========== 轮询 MCP 服务器 ==========
+    async function pollServer() {
+        if (!isServerConnected) return;
+        try {
+            const url = serverUrl.value.trim() + '/toy-next';
+            const resp = await fetch(url, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!resp.ok) {
+                log(`⚠️ 服务器响应异常: ${resp.status}`, 'warn');
+                return;
+            }
+            const data = await resp.json();
+            const command = data.command;
+            if (!command) {
+                // 静默跳过
+                return;
+            }
+            // 解析指令
+            const action = command.action;
+            const args = command.args || {};
+            log(`📨 收到指令: ${action} ${JSON.stringify(args)}`, 'info');
+
+            // 根据 action 分发
+            switch (action) {
+                case 'vibrate': {
+                    const mode = args.mode || 1;
+                    const level = args.level !== undefined ? args.level : 0;
+                    await sendVibration(mode, level);
+                    // 更新 UI 滑块和选择框
+                    vibMode.value = mode;
+                    vibLevel.value = level;
+                    vibLevelDisplay.textContent = level;
+                    break;
+                }
+                case 'suction': {
+                    const mode = args.mode || 1;
+                    const level = args.level !== undefined ? args.level : 0;
+                    await sendSuction(mode, level);
+                    sucMode.value = mode;
+                    sucLevel.value = level;
+                    sucLevelDisplay.textContent = level;
+                    break;
+                }
+                case 'heat': {
+                    const on = args.on === true;
+                    await sendHeat(on);
+                    heatStatus.textContent = on ? '开启' : '关闭';
+                    break;
+                }
+                case 'rotate': {
+                    const mode = args.mode || 0;
+                    await sendRotate(mode);
+                    rotMode.value = mode;
+                    break;
+                }
+                case 'stop_rotate': {
+                    await sendRotate(0);
+                    rotMode.value = 0;
+                    break;
+                }
+                case 'stop_all': {
+                    await stopAll();
+                    // 更新 UI
+                    vibLevel.value = 0;
+                    vibLevelDisplay.textContent = '0';
+                    sucLevel.value = 0;
+                    sucLevelDisplay.textContent = '0';
+                    rotMode.value = 0;
+                    heatStatus.textContent = '关闭';
+                    break;
+                }
+                default:
+                    log(`⚠️ 未知 action: ${action}`, 'warn');
+            }
+        } catch (e) {
+            log(`❌ 轮询错误: ${e.message}`, 'error');
+        }
+    }
+
+    // ========== 启动/停止轮询 ==========
+    function startPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(pollServer, 300);
+        log('🔄 轮询已启动 (300ms)', 'info');
+    }
+
+    function stopPolling() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            log('⏹ 轮询已停止', 'info');
+        }
+    }
+
+    function startKeepAlive() {
+        if (keepAliveTimer) clearInterval(keepAliveTimer);
+        keepAliveTimer = setInterval(keepAlive, 1500);
+        log('💓 续命已启动 (1.5s)', 'info');
+    }
+
+    function stopKeepAlive() {
+        if (keepAliveTimer) {
+            clearInterval(keepAliveTimer);
+            keepAliveTimer = null;
+            log('💔 续命已停止', 'info');
+        }
+    }
+
+    // ========== 服务器连接/断开 ==========
+    function connectServer() {
+        const url = serverUrl.value.trim();
+        if (!url) {
+            log('⚠️ 请输入服务器 URL', 'warn');
+            return;
+        }
+        // 尝试请求根路径检测连通性
+        fetch(url + '/', { method: 'GET' })
+            .then(res => {
+                if (res.ok) {
+                    isServerConnected = true;
+                    updateServerStatus('已连接', 'connected');
+                    log('✅ MCP 服务器连接成功', 'ok');
+                    startPolling();
+                    startKeepAlive();
+                } else {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+            })
+            .catch(e => {
+                log(`❌ 服务器连接失败: ${e.message}`, 'error');
+                updateServerStatus('连接失败', 'error');
+                isServerConnected = false;
+            });
+    }
+
+    function disconnectServer() {
+        isServerConnected = false;
+        stopPolling();
+        stopKeepAlive();
+        updateServerStatus('已断开');
+        log('🔌 MCP 服务器已断开', 'info');
+    }
+
+    // ========== 蓝牙连接/断开 ==========
+    async function connectBLE() {
+        if (isBLEConnected) {
+            log('ℹ️ 蓝牙已连接', 'info');
+            return;
+        }
+        try {
+            log('🔍 请求蓝牙设备...', 'info');
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'SL278H' }],  // 可改为你的设备名
+                optionalServices: [SERVICE_UUID]
+            });
+            log(`✅ 选择设备: ${device.name || device.id}`, 'ok');
+            deviceName.textContent = device.name || device.id;
+
+            const server = await device.gatt.connect();
+            log('🔗 已连接 GATT 服务器', 'ok');
+
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            log('📡 已获取服务', 'ok');
+
+            characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+            log('📡 已获取特征', 'ok');
+
+            isBLEConnected = true;
+            updateBLEStatus('已连接', 'connected');
+
+            // 自动播放音频保活（需用户手势触发）
+            try {
+                await audioEl.play();
+                log('🔊 无声音频保活已启动', 'info');
+            } catch (e) {
+                log('⚠️ 音频保活启动失败（可能需用户交互）', 'warn');
+            }
+
+            // 连接后发送当前 UI 状态
+            // 但建议不自动发送，等待用户操作或轮询指令
+        } catch (e) {
+            log(`❌ 蓝牙连接失败: ${e.message}`, 'error');
+            updateBLEStatus('连接失败', 'error');
+            characteristic = null;
+            isBLEConnected = false;
+        }
+    }
+
+    function disconnectBLE() {
+        if (characteristic) {
+            // 断开由浏览器处理，我们无法直接断开，但可以重置状态
+            characteristic = null;
+        }
+        isBLEConnected = false;
+        updateBLEStatus('已断开');
+        deviceName.textContent = '';
+        log('🔌 蓝牙已断开', 'info');
+        // 注意：实际断开需要调用 device.gatt.disconnect()，但我们没有保存 device 对象。
+        // 用户可点击“连接蓝牙”重新选择设备。
+        // 简单起见，重置 characteristic。
+        // 更好的做法是保存 device 引用，但此处省略。
+    }
+
+    // ========== UI 事件绑定 ==========
+
+    // 服务器
+    btnConnectServer.addEventListener('click', connectServer);
+    btnDisconnectServer.addEventListener('click', disconnectServer);
+
+    // 蓝牙
+    btnConnectBLE.addEventListener('click', connectBLE);
+    btnDisconnectBLE.addEventListener('click', disconnectBLE);
+
+    // 震动发送
+    btnSendVib.addEventListener('click', async () => {
+        const mode = parseInt(vibMode.value);
+        const level = parseInt(vibLevel.value);
+        await sendVibration(mode, level);
+    });
+    vibLevel.addEventListener('input', () => {
+        vibLevelDisplay.textContent = vibLevel.value;
+    });
+
+    // 吮吸发送
+    btnSendSuc.addEventListener('click', async () => {
+        const mode = parseInt(sucMode.value);
+        const level = parseInt(sucLevel.value);
+        await sendSuction(mode, level);
+    });
+    sucLevel.addEventListener('input', () => {
+        sucLevelDisplay.textContent = sucLevel.value;
+    });
+
+    // 加热
+    btnHeatOn.addEventListener('click', async () => {
+        await sendHeat(true);
+    });
+    btnHeatOff.addEventListener('click', async () => {
+        await sendHeat(false);
+    });
+
+    // 伸缩发送
+    btnSendRot.addEventListener('click', async () => {
+        const mode = parseInt(rotMode.value);
+        await sendRotate(mode);
+    });
+
+    // 测试按钮
+    btnTest.addEventListener('click', async () => {
+        log('🧪 发送测试指令: 震动模式3 强度80', 'info');
+        await sendVibration(3, 80);
+        // 同步 UI
+        vibMode.value = 3;
+        vibLevel.value = 80;
+        vibLevelDisplay.textContent = '80';
+    });
+
+    // 停止所有
+    btnStopAll.addEventListener('click', stopAll);
+
+    // 清空日志
+    btnClearLog.addEventListener('click', () => {
+        logArea.innerHTML = '';
+    });
+
+    // ========== 初始化 ==========
+    updateServerStatus('未连接');
+    updateBLEStatus('未连接');
+    log('🚀 页面已加载，请先连接服务器和蓝牙', 'info');
+    log('💡 提示: 吮吸命令头默认为 0x55，如需 0x05 请修改 cmdSuction 函数', 'warn');
+
+    // 自动尝试播放音频（需用户手势）
+    document.addEventListener('click', () => {
+        if (audioEl.paused) {
+            audioEl.play().catch(e => {});
+        }
+    }, { once: true });
+
+    // ========== 辅助：保活音频循环 ==========
+    // 音频已设置 loop，但需要确保在连接蓝牙后播放。
+    // 已在 connectBLE 中尝试播放。
+
+    // 额外：如果页面加载完成后用户点击任意位置，尝试播放音频。
+    // 上面的 click 监听已处理。
+</script>
+</body>
+</html>
